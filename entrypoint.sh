@@ -1,47 +1,70 @@
 #!/bin/bash
 set -e
 
-echo "=== [1/4] Crop для TIPs ==="
-python3 /home/user/crop_smart.py
+echo "=== [0/5] Подготовка ==="
+# Определяем имя входного файла
+INPUT_FILE=$(ls /input/*.nii.gz | head -1)
+INPUT_BASENAME=$(basename "$INPUT_FILE" .nii.gz)
+echo "Input: $INPUT_FILE"
+echo "Basename: $INPUT_BASENAME"
 
-echo "=== [2/4] TIPs: сегментация зубов ==="
-mkdir -p /home/user/data_teeth
-cp /tmp/patient01a_tips_0000.nii.gz /home/user/data_teeth/patient01a_cropped_0000.nii.gz
+# Для зубов обрезаем, имя будет с суффиксом _cropped_0000
+CROPPED_NAME="${INPUT_BASENAME}_cropped_0000"
+echo "Cropped name: $CROPPED_NAME"
 
+# === [1/5] Копирование весов ===
+echo "=== [1/5] Копирование весов ==="
 mkdir -p /home/user/TIPs/nnResults
 cp -r /models-tips/* /home/user/TIPs/nnResults/
+
+DENTAL_TARGET="/home/user/dental-nnUNet-results/Dataset112_DentalSegmentator"
+mkdir -p "$DENTAL_TARGET"
+cp -r /models-dental/* "$DENTAL_TARGET/"
+
+# === [2/5] Обрезка CBCT для TIPs ===
+echo "=== [2/5] Обрезка CBCT ==="
+mkdir -p /home/user/data_tips
+python3 /home/user/crop_smart.py "$INPUT_FILE" "/home/user/data_tips/${CROPPED_NAME}.nii.gz"
+
+# === [3/5] TIPs: сегментация зубов ===
+echo "=== [3/5] TIPs: сегментация зубов ==="
 cd /home/user/TIPs
-python3 TIPs.py /home/user/data_teeth
+python3 TIPs.py /home/user/data_tips
 
-echo "=== [3/4] DentalSegmentator: сегментация челюстей ==="
-TARGET="/home/user/dental-nnUNet-results/Dataset112_DentalSegmentator"
-mkdir -p "$TARGET"
-cp -r /models-dental/* "$TARGET/"
+# === [4/5] DentalSegmentator: сегментация челюстей ===
+echo "=== [4/5] DentalSegmentator ==="
 
-CKPT_DIR="$TARGET/nnUNetTrainer__nnUNetPlans__3d_fullres/fold_0"
+CKPT_DIR="$DENTAL_TARGET/nnUNetTrainer__nnUNetPlans__3d_fullres/fold_0"
 if [ -f "$CKPT_DIR/checkpoint_best.pth" ]; then
     CKPT="checkpoint_best.pth"
-else
+elif [ -f "$CKPT_DIR/checkpoint_final.pth" ]; then
     CKPT="checkpoint_final.pth"
+else
+    echo "!!! Не найден чекпоинт в $CKPT_DIR"
+    ls -la "$CKPT_DIR"
+    exit 1
 fi
+echo "Используем чекпоинт: $CKPT"
 
-export nnUNet_results="/home/user/dental-nnUNet-results"
 mkdir -p /home/user/dental-output
-/home/user/dental-venv/bin/nnUNetv2_predict \
-  -i /input \
-  -o /home/user/dental-output \
-  -d 112 -c 3d_fullres -tr nnUNetTrainer \
-  -chk "$CKPT" -f 0 -step_size 0.5 \
-  -npp 1 -nps 1
+env nnUNet_results="$DENTAL_TARGET/.." \
+    /home/user/dental-venv/bin/nnUNetv2_predict \
+    -i /input \
+    -o /home/user/dental-output \
+    -d 112 -c 3d_fullres -tr nnUNetTrainer \
+    -chk "$CKPT" -f 0 -step_size 0.5 \
+    -npp 1 -nps 1
 
-echo "=== [4/4] Объединение масок ==="
-python3 /home/user/merge_labels.py
+# === [5/5] Объединение ===
+echo "=== [5/5] Объединение масок ==="
+python3 /home/user/merge_labels.py "$INPUT_BASENAME"
 
+# === Копирование результатов ===
 echo "=== Копирование в /output ==="
 mkdir -p /output
-cp /home/user/data_teeth_resample_teeth_instance/*.nii.gz /output/teeth_only.nii.gz
-cp /home/user/dental-output/*.nii.gz /output/jaws_only.nii.gz
 cp /home/user/combined_labels.nii.gz /output/combined_labels.nii.gz
+cp "/home/user/data_tips_resample_teeth_instance/${CROPPED_NAME}.nii.gz" /output/teeth_only.nii.gz
+cp "/home/user/dental-output/${INPUT_BASENAME}.nii.gz" /output/jaws_only.nii.gz
 
 echo "=== Готово ==="
 ls -la /output
