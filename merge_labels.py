@@ -12,15 +12,32 @@ input_basename = sys.argv[1]
 cropped_name = f"{input_basename}_cropped_0000"
 
 # === Пути ===
-FULL_CBCT   = f"/input/{input_basename}.nii.gz"
-TIPS_MASK   = f"/home/user/data_tips_resample_teeth_instance/{cropped_name}.nii.gz"
-DENTAL_MASK = f"/home/user/dental-output/{input_basename}.nii.gz"
-OUTPUT      = "/home/user/combined_labels.nii.gz"
-
-for path in (FULL_CBCT, TIPS_MASK, DENTAL_MASK):
-    if not os.path.exists(path):
-        print(f"!!! Не найден файл: {path}")
+# === Динамический поиск файлов ===
+FULL_CBCT = f"/input/{input_basename}.nii.gz"
+if not os.path.exists(FULL_CBCT):
+    fulls = glob.glob("/input/*.nii.gz")
+    if not fulls:
+        print("!!! Нет файлов в /input/")
         sys.exit(1)
+    FULL_CBCT = fulls[0]
+
+tips_files = glob.glob("/home/user/data_tips_resample_teeth_instance/*.nii.gz")
+if not tips_files:
+    print("!!! Нет TIPs маски в /home/user/data_tips_resample_teeth_instance/")
+    sys.exit(1)
+TIPS_MASK = tips_files[0]
+
+dental_files = glob.glob("/home/user/dental-output/*.nii.gz")
+if not dental_files:
+    print("!!! Нет Dental маски в /home/user/dental-output/")
+    sys.exit(1)
+DENTAL_MASK = dental_files[0]
+
+OUTPUT = "/home/user/combined_labels.nii.gz"
+
+print(f"Full CBCT:   {FULL_CBCT}")
+print(f"TIPs mask:   {TIPS_MASK}")
+print(f"Dental mask: {DENTAL_MASK}")
 
 print(f"Full CBCT:   {FULL_CBCT}")
 print(f"TIPs mask:   {TIPS_MASK}")
