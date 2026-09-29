@@ -11,7 +11,7 @@ if len(sys.argv) < 3:
 INPUT = sys.argv[1]
 OUTPUT = sys.argv[2]
 
-TARGET = 600
+TARGET = 450
 PAD_KEEP = 40
 PAD_CUT = 5
 
