@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set +e
 
 echo "=== [0/5] Подготовка ==="
 # Определяем имя входного файла
@@ -62,9 +62,23 @@ python3 /home/user/merge_labels.py "$INPUT_BASENAME"
 # === Копирование результатов ===
 echo "=== Копирование в /output ==="
 mkdir -p /output
-cp /home/user/combined_labels.nii.gz /output/combined_labels.nii.gz
-cp "/home/user/data_tips_resample_teeth_instance/${CROPPED_NAME}.nii.gz" /output/teeth_only.nii.gz
-cp "/home/user/dental-output/${INPUT_BASENAME}.nii.gz" /output/jaws_only.nii.gz
+
+# Копируем всё что есть — с любыми именами
+cp /home/user/combined_labels.nii.gz /output/combined_labels.nii.gz || echo "!!! Нет combined"
+
+# TIPs маска — берём первый .nii.gz
+TIPS_OUT=$(ls /home/user/data_tips_resample_teeth_instance/*.nii.gz 2>/dev/null | head -1)
+if [ -n "$TIPS_OUT" ]; then
+    cp "$TIPS_OUT" /output/teeth_only.nii.gz
+    echo "Скопирована TIPs маска: $TIPS_OUT"
+fi
+
+# Dental маска — берём первый .nii.gz
+DENTAL_OUT=$(ls /home/user/dental-output/*.nii.gz 2>/dev/null | head -1)
+if [ -n "$DENTAL_OUT" ]; then
+    cp "$DENTAL_OUT" /output/jaws_only.nii.gz
+    echo "Скопирована Dental маска: $DENTAL_OUT"
+fi
 
 echo "=== Готово ==="
 ls -la /output
